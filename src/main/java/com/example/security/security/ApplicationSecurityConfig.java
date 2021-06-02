@@ -14,6 +14,9 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+
+import java.util.concurrent.TimeUnit;
 
 import static com.example.security.security.ApplicationUserPermission.COURSE_WRITE;
 import static com.example.security.security.ApplicationUserRole.*;
@@ -36,6 +39,7 @@ public class ApplicationSecurityConfig extends WebSecurityConfigurerAdapter {
         http
                 /*.csrf().csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                 .and() */ /* Generate cookie token, to pass in request headers to allow (PUT, DELETE, POST) . */
+                .csrf().disable()
                 .authorizeRequests()
                 .antMatchers("/", "index", "/css/*", "/js/*").permitAll()
                 .antMatchers("/api/**").hasRole(STUDENT.name())
@@ -45,11 +49,37 @@ public class ApplicationSecurityConfig extends WebSecurityConfigurerAdapter {
 //                .antMatchers(HttpMethod.GET,"/management/api/**").hasAnyRole(ADMIN.name(), ADMINTRAINEE.name())
                 .anyRequest()
                 .authenticated()
+
                 .and()
-                .httpBasic(); // Basic authentication.
+                .formLogin() // Form Based Authentication (Force the user to login) (data in memory)
+                .loginPage("/login").permitAll()
+                .defaultSuccessUrl("/courses", true)
+                .passwordParameter("password") // The same of name attribute in login.html
+                .usernameParameter("username") // The same of name attribute in login.html
+
+                .and()
+                .rememberMe()
+                .tokenValiditySeconds((int) TimeUnit.DAYS.toSeconds(21)) // Allow inactivity to 21 days// .
+                .key("somethingverysecure")
+                .rememberMeParameter("remember-me") // The same of name attribute in login.html
+
+                .and()
+                .logout()
+                .logoutUrl("/logout")
+                .logoutRequestMatcher(new AntPathRequestMatcher("/logout", "GET")) // If csrf is disable
+                .clearAuthentication(true)
+                .invalidateHttpSession(true)
+                .deleteCookies("JSESSIONID", "remember-me")
+                .logoutSuccessUrl("/login");
+
+        // Basic authentication(Authorization: Type= Basic Auth | username: password:)
+        // Don't allow logout
+//                .httpBasic();
     }
 
-    /** User in memory with encrypt password (Class PasswordConfig to set the type of encode). **/
+    /**
+     * User in memory with encrypt password (Class PasswordConfig to set the type of encode).
+     **/
     @Override
     @Bean
     protected UserDetailsService userDetailsService() {
@@ -57,21 +87,18 @@ public class ApplicationSecurityConfig extends WebSecurityConfigurerAdapter {
                 .username("israel")
                 .password(passwordEncoder.encode("password"))
                 .authorities(STUDENT.getGrantedAuthorities())
-//                .roles(STUDENT.name()) // ROLE_STUDENT
                 .build();
 
         UserDetails monseUser = User.builder()
                 .username("monserrat")
                 .password(passwordEncoder.encode("12345"))
                 .authorities(ADMIN.getGrantedAuthorities())
-//                .roles(ADMIN.name()) // ROLE_ADMIN
                 .build();
 
         UserDetails tomUser = User.builder()
                 .username("tom")
                 .password(passwordEncoder.encode("12345"))
                 .authorities(ADMINTRAINEE.getGrantedAuthorities())
-//                .roles(ADMINTRAINEE.name()) //ROLE_ADMINTRAINEE
                 .build();
 
         return new InMemoryUserDetailsManager(
